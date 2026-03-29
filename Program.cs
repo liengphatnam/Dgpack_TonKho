@@ -24,7 +24,7 @@ app.MapGet("/", async (IConfiguration config) =>
                 MaGiay,
                 TenGiay,
                 KhoGiay,
-                SoLuongTon
+                SoLuongCon
             FROM gc.vw_TonKhoGiayCuon_Chuahet
         ", conn);
 
@@ -35,9 +35,9 @@ app.MapGet("/", async (IConfiguration config) =>
             var maGiay = reader["MaGiay"]?.ToString() ?? "";
             var tenGiay = reader["TenGiay"]?.ToString() ?? "";
             var khoGiay = reader["KhoGiay"]?.ToString() ?? "";
-            var soLuongTon = reader["SoLuongTon"]?.ToString() ?? "";
+            var soLuongCon = reader["SoLuongCon"]?.ToString() ?? "";
 
-            rows.Add($"<tr><td>{maGiay}</td><td>{tenGiay}</td><td>{khoGiay}</td><td>{soLuongTon}</td></tr>");
+            rows.Add($"<tr><td>{maGiay}</td><td>{tenGiay}</td><td>{khoGiay}</td><td>{soLuongCon}</td></tr>");
         }
 
         var html = $"""
@@ -53,7 +53,7 @@ app.MapGet("/", async (IConfiguration config) =>
                     <th>Mã giấy</th>
                     <th>Tên giấy</th>
                     <th>Kho giấy</th>
-                    <th>Số lượng tồn</th>
+                    <th>Số lượng còn</th>
                 </tr>
                 {string.Join("", rows)}
             </table>
