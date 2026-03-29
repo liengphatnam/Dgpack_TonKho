@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
@@ -23,7 +24,9 @@ app.MapGet("/", async (HttpRequest request, IConfiguration config) =>
         using var conn = new SqlConnection(connStr);
         await conn.OpenAsync();
 
-        using (var cmdKho = new SqlCommand("SELECT DISTINCT KhoGiay FROM gc.vw_TonKhoGiayCuon_Chuahet ORDER BY KhoGiay", conn))
+        using (var cmdKho = new SqlCommand(
+            "SELECT DISTINCT CAST(KhoGiay AS nvarchar(50)) AS KhoGiay FROM gc.vw_TonKhoGiayCuon_Chuahet ORDER BY CAST(KhoGiay AS nvarchar(50))",
+            conn))
         using (var readerKho = await cmdKho.ExecuteReaderAsync())
         {
             while (await readerKho.ReadAsync())
@@ -39,7 +42,7 @@ app.MapGet("/", async (HttpRequest request, IConfiguration config) =>
                 KhoGiay
             FROM gc.vw_TonKhoGiayCuon_Chuahet
             WHERE (@kw = '' OR MaGiay LIKE '%' + @kw + '%')
-              AND (@kho = '' OR KhoGiay = @kho)
+              AND (@kho = '' OR CAST(KhoGiay AS nvarchar(50)) = @kho)
             ORDER BY MaGiay";
 
         using var cmd = new SqlCommand(sql, conn);
@@ -54,15 +57,17 @@ app.MapGet("/", async (HttpRequest request, IConfiguration config) =>
             var trongLuongCon = reader["TrongLuongCon"]?.ToString() ?? "";
             var khoGiay = reader["KhoGiay"]?.ToString() ?? "";
 
-            rows.Add("<tr><td>" + maGiay + "</td><td>" + trongLuongCon + "</td><td>" + khoGiay + "</td></tr>");
+            rows.Add("<tr><td>" + WebUtility.HtmlEncode(maGiay) + "</td><td>"
+                + WebUtility.HtmlEncode(trongLuongCon) + "</td><td>"
+                + WebUtility.HtmlEncode(khoGiay) + "</td></tr>");
         }
 
         var khoHtml = "<option value=''>-- Tất cả kho --</option>";
         foreach (var k in khoOptions)
         {
             var selected = k == kho ? " selected" : "";
-            khoHtml += "<option value='" + System.Net.WebUtility.HtmlEncode(k) + "'" + selected + ">" 
-                    + System.Net.WebUtility.HtmlEncode(k) + "</option>";
+            khoHtml += "<option value='" + WebUtility.HtmlEncode(k) + "'" + selected + ">"
+                    + WebUtility.HtmlEncode(k) + "</option>";
         }
 
         var html = ""
@@ -81,7 +86,7 @@ app.MapGet("/", async (HttpRequest request, IConfiguration config) =>
             + "<body>"
             + "<h2>DGPack - Tồn kho</h2>"
             + "<form method='get'>"
-            + "<input name='q' placeholder='Tìm mã giấy...' value='" + System.Net.WebUtility.HtmlEncode(keyword) + "' />"
+            + "<input name='q' placeholder='Tìm mã giấy...' value='" + WebUtility.HtmlEncode(keyword) + "' />"
             + "<select name='kho'>" + khoHtml + "</select>"
             + "<button type='submit'>Lọc</button>"
             + "</form>"
@@ -96,7 +101,7 @@ app.MapGet("/", async (HttpRequest request, IConfiguration config) =>
     }
     catch (Exception ex)
     {
-        var html = "<h2>Lỗi SQL/App</h2><pre>" + System.Net.WebUtility.HtmlEncode(ex.ToString()) + "</pre>";
+        var html = "<h2>Lỗi SQL/App</h2><pre>" + WebUtility.HtmlEncode(ex.ToString()) + "</pre>";
         return Results.Content(html, "text/html; charset=utf-8");
     }
 });
