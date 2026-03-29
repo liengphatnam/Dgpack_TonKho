@@ -22,9 +22,7 @@ app.MapGet("/", async (IConfiguration config) =>
         using var cmd = new SqlCommand(@"
             SELECT TOP 50
                 MaGiay,
-                TenGiay,
-                KhoGiay,
-                SoLuongCon
+                TrongLuongCon
             FROM gc.vw_TonKhoGiayCuon_Chuahet
         ", conn);
 
@@ -33,11 +31,9 @@ app.MapGet("/", async (IConfiguration config) =>
         while (await reader.ReadAsync())
         {
             var maGiay = reader["MaGiay"]?.ToString() ?? "";
-            var tenGiay = reader["TenGiay"]?.ToString() ?? "";
-            var khoGiay = reader["KhoGiay"]?.ToString() ?? "";
-            var soLuongCon = reader["SoLuongCon"]?.ToString() ?? "";
+            var trongLuongCon = reader["TrongLuongCon"]?.ToString() ?? "";
 
-            rows.Add($"<tr><td>{maGiay}</td><td>{tenGiay}</td><td>{khoGiay}</td><td>{soLuongCon}</td></tr>");
+            rows.Add($"<tr><td>{maGiay}</td><td>{trongLuongCon}</td></tr>");
         }
 
         var html = $"""
@@ -51,9 +47,7 @@ app.MapGet("/", async (IConfiguration config) =>
             <table border="1" cellspacing="0" cellpadding="8">
                 <tr>
                     <th>Mã giấy</th>
-                    <th>Tên giấy</th>
-                    <th>Kho giấy</th>
-                    <th>Số lượng còn</th>
+                    <th>Trọng lượng còn</th>
                 </tr>
                 {string.Join("", rows)}
             </table>
