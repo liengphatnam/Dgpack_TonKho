@@ -8,23 +8,39 @@ app.MapGet("/", async (HttpRequest request, IConfiguration config) =>
     var connStr = config.GetConnectionString("Default");
 
     var keyword = request.Query["q"].ToString();
+    var kho = request.Query["kho"].ToString();
 
     var rows = new List<string>();
+    var khoOptions = new List<string>();
 
     using var conn = new SqlConnection(connStr);
     await conn.OpenAsync();
 
+    // Load danh sách kho
+    using (var cmdKho = new SqlCommand("SELECT DISTINCT KhoGiay FROM gc.vw_TonKhoGiayCuon_Chuahet", conn))
+    using (var readerKho = await cmdKho.ExecuteReaderAsync())
+    {
+        while (await readerKho.ReadAsync())
+        {
+            khoOptions.Add(readerKho["KhoGiay"].ToString());
+        }
+    }
+
+    // Query chính
     var sql = @"
         SELECT TOP 100
             MaGiay,
-            TrongLuongCon
+            TrongLuongCon,
+            KhoGiay
         FROM gc.vw_TonKhoGiayCuon_Chuahet
         WHERE (@kw = '' OR MaGiay LIKE '%' + @kw + '%')
+          AND (@kho = '' OR KhoGiay = @kho)
         ORDER BY MaGiay
     ";
 
     using var cmd = new SqlCommand(sql, conn);
     cmd.Parameters.AddWithValue("@kw", keyword ?? "");
+    cmd.Parameters.AddWithValue("@kho", kho ?? "");
 
     using var reader = await cmd.ExecuteReaderAsync();
 
@@ -32,8 +48,17 @@ app.MapGet("/", async (HttpRequest request, IConfiguration config) =>
     {
         var maGiay = reader["MaGiay"]?.ToString() ?? "";
         var trongLuongCon = reader["TrongLuongCon"]?.ToString() ?? "";
+        var khoGiay = reader["KhoGiay"]?.ToString() ?? "";
 
-        rows.Add($"<tr><td>{maGiay}</td><td>{trongLuongCon}</td></tr>");
+        rows.Add($"<tr><td>{maGiay}</td><td>{trongLuongCon}</td><td>{khoGiay}</td></tr>");
+    }
+
+    // Dropdown kho
+    var khoHtml = "<option value=''>-- Tất cả kho --</option>";
+    foreach (var k in khoOptions)
+    {
+        var selected = k == kho ? "selected" : "";
+        khoHtml += $"<option value='{k}' {selected}>{k}</option>";
     }
 
     var html = $"""
@@ -41,21 +66,30 @@ app.MapGet("/", async (HttpRequest request, IConfiguration config) =>
     <head>
         <meta charset="utf-8" />
         <title>DGPack - Tồn kho</title>
+        <style>
+            body {{ font-family: Arial; padding: 10px; }}
+            table {{ border-collapse: collapse; width: 100%; }}
+            th, td {{ border: 1px solid #ccc; padding: 8px; text-align: left; }}
+            th {{ background: #eee; }}
+            input, select, button {{ padding: 6px; margin: 4px 0; }}
+        </style>
     </head>
     <body>
-        <h1>DGPack - Tồn kho</h1>
+        <h2>DGPack - Tồn kho</h2>
 
         <form method="get">
             <input name="q" placeholder="Tìm mã giấy..." value="{keyword}" />
-            <button type="submit">Tìm</button>
+            <select name="kho">
+                {khoHtml}
+            </select>
+            <button type="submit">Lọc</button>
         </form>
 
-        <br/>
-
-        <table border="1" cellspacing="0" cellpadding="8">
+        <table>
             <tr>
                 <th>Mã giấy</th>
                 <th>Trọng lượng còn</th>
+                <th>Kho</th>
             </tr>
             {string.Join("", rows)}
         </table>
