@@ -7,97 +7,98 @@ app.MapGet("/", async (HttpRequest request, IConfiguration config) =>
 {
     var connStr = config.GetConnectionString("Default");
 
+    if (string.IsNullOrWhiteSpace(connStr))
+    {
+        return Results.Content("<h2>Lỗi: chưa cấu hình Connection String 'Default'.</h2>", "text/html; charset=utf-8");
+    }
+
     var keyword = request.Query["q"].ToString();
     var kho = request.Query["kho"].ToString();
 
     var rows = new List<string>();
     var khoOptions = new List<string>();
 
-    using var conn = new SqlConnection(connStr);
-    await conn.OpenAsync();
-
-    // Load danh sách kho
-    using (var cmdKho = new SqlCommand("SELECT DISTINCT KhoGiay FROM gc.vw_TonKhoGiayCuon_Chuahet", conn))
-    using (var readerKho = await cmdKho.ExecuteReaderAsync())
+    try
     {
-        while (await readerKho.ReadAsync())
+        using var conn = new SqlConnection(connStr);
+        await conn.OpenAsync();
+
+        using (var cmdKho = new SqlCommand("SELECT DISTINCT KhoGiay FROM gc.vw_TonKhoGiayCuon_Chuahet ORDER BY KhoGiay", conn))
+        using (var readerKho = await cmdKho.ExecuteReaderAsync())
         {
-            khoOptions.Add(readerKho["KhoGiay"].ToString());
+            while (await readerKho.ReadAsync())
+            {
+                khoOptions.Add(readerKho["KhoGiay"]?.ToString() ?? "");
+            }
         }
+
+        var sql = @"
+            SELECT TOP 100
+                MaGiay,
+                TrongLuongCon,
+                KhoGiay
+            FROM gc.vw_TonKhoGiayCuon_Chuahet
+            WHERE (@kw = '' OR MaGiay LIKE '%' + @kw + '%')
+              AND (@kho = '' OR KhoGiay = @kho)
+            ORDER BY MaGiay";
+
+        using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@kw", keyword ?? "");
+        cmd.Parameters.AddWithValue("@kho", kho ?? "");
+
+        using var reader = await cmd.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            var maGiay = reader["MaGiay"]?.ToString() ?? "";
+            var trongLuongCon = reader["TrongLuongCon"]?.ToString() ?? "";
+            var khoGiay = reader["KhoGiay"]?.ToString() ?? "";
+
+            rows.Add("<tr><td>" + maGiay + "</td><td>" + trongLuongCon + "</td><td>" + khoGiay + "</td></tr>");
+        }
+
+        var khoHtml = "<option value=''>-- Tất cả kho --</option>";
+        foreach (var k in khoOptions)
+        {
+            var selected = k == kho ? " selected" : "";
+            khoHtml += "<option value='" + System.Net.WebUtility.HtmlEncode(k) + "'" + selected + ">" 
+                    + System.Net.WebUtility.HtmlEncode(k) + "</option>";
+        }
+
+        var html = ""
+            + "<html>"
+            + "<head>"
+            + "<meta charset='utf-8' />"
+            + "<title>DGPack - Tồn kho</title>"
+            + "<style>"
+            + "body{font-family:Arial;padding:10px;}"
+            + "table{border-collapse:collapse;width:100%;}"
+            + "th,td{border:1px solid #ccc;padding:8px;text-align:left;}"
+            + "th{background:#eee;}"
+            + "input,select,button{padding:6px;margin:4px 0;}"
+            + "</style>"
+            + "</head>"
+            + "<body>"
+            + "<h2>DGPack - Tồn kho</h2>"
+            + "<form method='get'>"
+            + "<input name='q' placeholder='Tìm mã giấy...' value='" + System.Net.WebUtility.HtmlEncode(keyword) + "' />"
+            + "<select name='kho'>" + khoHtml + "</select>"
+            + "<button type='submit'>Lọc</button>"
+            + "</form>"
+            + "<table>"
+            + "<tr><th>Mã giấy</th><th>Trọng lượng còn</th><th>Kho</th></tr>"
+            + string.Join("", rows)
+            + "</table>"
+            + "</body>"
+            + "</html>";
+
+        return Results.Content(html, "text/html; charset=utf-8");
     }
-
-    // Query chính
-    var sql = @"
-        SELECT TOP 100
-            MaGiay,
-            TrongLuongCon,
-            KhoGiay
-        FROM gc.vw_TonKhoGiayCuon_Chuahet
-        WHERE (@kw = '' OR MaGiay LIKE '%' + @kw + '%')
-          AND (@kho = '' OR KhoGiay = @kho)
-        ORDER BY MaGiay
-    ";
-
-    using var cmd = new SqlCommand(sql, conn);
-    cmd.Parameters.AddWithValue("@kw", keyword ?? "");
-    cmd.Parameters.AddWithValue("@kho", kho ?? "");
-
-    using var reader = await cmd.ExecuteReaderAsync();
-
-    while (await reader.ReadAsync())
+    catch (Exception ex)
     {
-        var maGiay = reader["MaGiay"]?.ToString() ?? "";
-        var trongLuongCon = reader["TrongLuongCon"]?.ToString() ?? "";
-        var khoGiay = reader["KhoGiay"]?.ToString() ?? "";
-
-        rows.Add($"<tr><td>{maGiay}</td><td>{trongLuongCon}</td><td>{khoGiay}</td></tr>");
+        var html = "<h2>Lỗi SQL/App</h2><pre>" + System.Net.WebUtility.HtmlEncode(ex.ToString()) + "</pre>";
+        return Results.Content(html, "text/html; charset=utf-8");
     }
-
-    // Dropdown kho
-    var khoHtml = "<option value=''>-- Tất cả kho --</option>";
-    foreach (var k in khoOptions)
-    {
-        var selected = k == kho ? "selected" : "";
-        khoHtml += $"<option value='{k}' {selected}>{k}</option>";
-    }
-
-    var html = $"""
-    <html>
-    <head>
-        <meta charset="utf-8" />
-        <title>DGPack - Tồn kho</title>
-        <style>
-            body {{ font-family: Arial; padding: 10px; }}
-            table {{ border-collapse: collapse; width: 100%; }}
-            th, td {{ border: 1px solid #ccc; padding: 8px; text-align: left; }}
-            th {{ background: #eee; }}
-            input, select, button {{ padding: 6px; margin: 4px 0; }}
-        </style>
-    </head>
-    <body>
-        <h2>DGPack - Tồn kho</h2>
-
-        <form method="get">
-            <input name="q" placeholder="Tìm mã giấy..." value="{keyword}" />
-            <select name="kho">
-                {khoHtml}
-            </select>
-            <button type="submit">Lọc</button>
-        </form>
-
-        <table>
-            <tr>
-                <th>Mã giấy</th>
-                <th>Trọng lượng còn</th>
-                <th>Kho</th>
-            </tr>
-            {string.Join("", rows)}
-        </table>
-    </body>
-    </html>
-    """;
-
-    return Results.Content(html, "text/html; charset=utf-8");
 });
 
 app.Run();
