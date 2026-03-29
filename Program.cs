@@ -9,17 +9,17 @@ app.MapGet("/", async (IConfiguration config) =>
 
     if (string.IsNullOrWhiteSpace(connStr))
     {
-        return Results.Content("<h2>Lỗi: chưa cấu hình Connection String 'Default'.</h2>", "text/html");
+        return Results.Content("<h2>Lỗi: chưa cấu hình Connection String 'Default'.</h2>", "text/html; charset=utf-8");
     }
 
-    var list = new List<dynamic>();
+    var rows = new List<string>();
 
     try
     {
-        using SqlConnection conn = new SqlConnection(connStr);
+        using var conn = new SqlConnection(connStr);
         await conn.OpenAsync();
 
-        using SqlCommand cmd = new SqlCommand(@"
+        using var cmd = new SqlCommand(@"
             SELECT TOP 50
                 MaGiay,
                 TenGiay,
@@ -32,31 +32,40 @@ app.MapGet("/", async (IConfiguration config) =>
 
         while (await reader.ReadAsync())
         {
-            list.Add(new
-            {
-                MaGiay = reader["MaGiay"]?.ToString(),
-                TenGiay = reader["TenGiay"]?.ToString(),
-                KhoGiay = reader["KhoGiay"]?.ToString(),
-                SoLuongTon = reader["SoLuongTon"]?.ToString()
-            });
+            var maGiay = reader["MaGiay"]?.ToString() ?? "";
+            var tenGiay = reader["TenGiay"]?.ToString() ?? "";
+            var khoGiay = reader["KhoGiay"]?.ToString() ?? "";
+            var soLuongTon = reader["SoLuongTon"]?.ToString() ?? "";
+
+            rows.Add($"<tr><td>{maGiay}</td><td>{tenGiay}</td><td>{khoGiay}</td><td>{soLuongTon}</td></tr>");
         }
 
-        var html = "<h1>DGPack - Tồn kho thật</h1>";
-        html += "<table border='1' cellspacing='0' cellpadding='8'>";
-        html += "<tr><th>Mã giấy</th><th>Tên giấy</th><th>Kho giấy</th><th>Số lượng tồn</th></tr>";
-
-        foreach (var item in list)
-        {
-            html += $"<tr><td>{item.MaGiay}</td><td>{item.TenGiay}</td><td>{item.KhoGiay}</td><td>{item.SoLuongTon}</td></tr>";
-        }
-
-        html += "</table>";
+        var html = $"""
+        <html>
+        <head>
+            <meta charset="utf-8" />
+            <title>DGPack - Tồn kho thật</title>
+        </head>
+        <body>
+            <h1>DGPack - Tồn kho thật</h1>
+            <table border="1" cellspacing="0" cellpadding="8">
+                <tr>
+                    <th>Mã giấy</th>
+                    <th>Tên giấy</th>
+                    <th>Kho giấy</th>
+                    <th>Số lượng tồn</th>
+                </tr>
+                {string.Join("", rows)}
+            </table>
+        </body>
+        </html>
+        """;
 
         return Results.Content(html, "text/html; charset=utf-8");
     }
     catch (Exception ex)
     {
-        var html = $"<h2>Lỗi SQL/App</h2><pre>{System.Net.WebUtility.HtmlEncode(ex.Message)}</pre>";
+        var html = $"<h2>Lỗi SQL/App</h2><pre>{System.Net.WebUtility.HtmlEncode(ex.ToString())}</pre>";
         return Results.Content(html, "text/html; charset=utf-8");
     }
 });
